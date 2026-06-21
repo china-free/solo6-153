@@ -1,0 +1,90 @@
+# 合规扫描默认黑话字典
+# 每个规则包含: name, pattern (正则), severity, description
+# 支持自定义扩展
+
+patterns:
+  - name: internal-ip
+    pattern: '\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b'
+    severity: high
+    description: '内网 IP 地址'
+
+  - name: internal-domain
+    pattern: '\b[a-zA-Z0-9.-]*\.internal(?:\.corp)?\b'
+    severity: high
+    description: '内部域名后缀'
+
+  - name: aws-access-key
+    pattern: '\bAKIA[0-9A-Z]{16}\b'
+    severity: critical
+    description: 'AWS Access Key'
+
+  - name: aws-secret-key
+    pattern: '(?i)aws.{0,20}[''"`]?[0-9a-zA-Z/+]{40}[''"`]?'
+    severity: critical
+    description: 'AWS Secret Key'
+
+  - name: github-token
+    pattern: '\bghp_[0-9a-zA-Z]{36}\b'
+    severity: critical
+    description: 'GitHub Personal Access Token'
+
+  - name: private-key
+    pattern: '-----BEGIN (?:RSA|OPENSSH|EC|PGP|DSA) PRIVATE KEY-----'
+    severity: critical
+    description: '私钥文件内容'
+
+  - name: api-key
+    pattern: '(?i)(?:api[_-]?key|apikey).{0,10}[:=]\s*[''"`]?[a-zA-Z0-9_\-]{20,}[''"`]?'
+    severity: high
+    description: 'API Key'
+
+  - name: password
+    pattern: '(?i)(?:password|passwd|pwd).{0,10}[:=]\s*[''"`]?[^\s''"`]{6,}[''"`]?'
+    severity: high
+    description: '明文密码'
+
+  - name: jdbc-connection
+    pattern: '(?i)jdbc:[a-z]+://[^\s]+'
+    severity: high
+    description: 'JDBC 数据库连接串'
+
+  - name: internal-phone
+    pattern: '\b(?:0\d{2,3}-?\d{7,8}|1[3-9]\d{9})\b'
+    severity: medium
+    description: '手机号码或座机号'
+
+  - name: id-card
+    pattern: '\b[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b'
+    severity: high
+    description: '身份证号'
+
+  - name: email-address
+    pattern: '\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+    severity: low
+    description: '邮箱地址'
+
+  - name: sensitive-word
+    pattern: '(?i)\b(?:机密|绝密|内部使用|严禁外传|confidential|top\s*secret)\b'
+    severity: medium
+    description: '敏感词汇'
+
+excludes:
+  - '.git/'
+  - 'node_modules/'
+  - '__pycache__/'
+  - '*.min.js'
+  - '*.min.css'
+  - '*.png'
+  - '*.jpg'
+  - '*.jpeg'
+  - '*.gif'
+  - '*.ico'
+  - '*.pdf'
+  - '*.zip'
+  - '*.tar.gz'
+  - '*.exe'
+  - '*.dll'
+  - '.venv/'
+  - 'venv/'
+  - 'dist/'
+  - 'build/'

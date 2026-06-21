@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: compliance-scan
+Version: 0.1.0
+Summary: 合规扫描工具 - 防止敏感信息泄露的 pre-commit hook 和 CLI
+Author: Security Team
+License: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: PyYAML>=6.0

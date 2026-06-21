@@ -1,0 +1,9 @@
+- id: compliance-scan
+  name: Compliance Scan
+  description: 扫描代码中的敏感信息（内部IP、密钥、敏感词等）
+  entry: compliance-scan
+  language: python
+  types: [text]
+  pass_filenames: true
+  args: []
+  minimum_pre_commit_version: '2.9.0'

@@ -1,0 +1,16 @@
+pyproject.toml
+compliance_scan/__init__.py
+compliance_scan/__main__.py
+compliance_scan/cli.py
+compliance_scan/config.py
+compliance_scan/default-patterns.yaml
+compliance_scan/fixer.py
+compliance_scan/hook.py
+compliance_scan/reporter.py
+compliance_scan/scanner.py
+compliance_scan.egg-info/PKG-INFO
+compliance_scan.egg-info/SOURCES.txt
+compliance_scan.egg-info/dependency_links.txt
+compliance_scan.egg-info/entry_points.txt
+compliance_scan.egg-info/requires.txt
+compliance_scan.egg-info/top_level.txt

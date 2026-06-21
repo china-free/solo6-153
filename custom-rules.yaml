@@ -1,0 +1,49 @@
+# 自定义黑话字典示例
+# 可根据公司实际情况添加内部域名、高管名字、项目代号等
+
+patterns:
+  - name: internal-ip
+    pattern: '\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b'
+    severity: high
+    description: '内网 IP 地址'
+
+  - name: internal-domain
+    pattern: '\b[a-zA-Z0-9.-]*\.(?:mycompany\.internal|corp\.local)\b'
+    severity: high
+    description: '公司内部域名'
+
+  - name: executive-name
+    pattern: '(?i)\b(?:zhang\s*san|li\s*si|wang\s*wu|zhao\s*liu)\b'
+    severity: medium
+    description: '高管姓名'
+
+  - name: secret-project
+    pattern: '(?i)\b(?:project\s*x| phoenix\s*plan| dragon\s*eye)\b'
+    severity: high
+    description: '机密项目代号'
+
+  - name: internal-keyword
+    pattern: '(?i)\b(?:仅供内部|内部讨论|不得外传)\b'
+    severity: medium
+    description: '内部使用关键字'
+
+excludes:
+  - '.git/'
+  - 'node_modules/'
+  - '__pycache__/'
+  - '*.min.js'
+  - '*.min.css'
+  - '*.png'
+  - '*.jpg'
+  - '*.jpeg'
+  - '*.gif'
+  - '*.ico'
+  - '*.pdf'
+  - '*.zip'
+  - '*.tar.gz'
+  - '*.exe'
+  - '*.dll'
+  - '.venv/'
+  - 'venv/'
+  - 'dist/'
+  - 'build/'

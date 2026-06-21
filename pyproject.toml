@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compliance-scan"
+version = "0.1.0"
+description = "合规扫描工具 - 防止敏感信息泄露的 pre-commit hook 和 CLI"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Security Team" }]
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+compliance-scan = "compliance_scan.__main__:main"
+
+[project.entry-points."pre_commit_hooks"]
+compliance-scan = "compliance_scan.hook:main"
+
+[tool.setuptools.packages.find]
+include = ["compliance_scan*"]
+
+[tool.setuptools.package-data]
+compliance_scan = ["default-patterns.yaml"]

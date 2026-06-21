@@ -1,0 +1,5 @@
+[console_scripts]
+compliance-scan = compliance_scan.__main__:main
+
+[pre_commit_hooks]
+compliance-scan = compliance_scan.hook:main
