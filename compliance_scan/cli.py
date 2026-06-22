@@ -98,7 +98,8 @@ def install_hook() -> int:
 
 echo "正在运行合规扫描..."
 
-# 获取暂存的文件列表
+# 获取暂存的文件列表（转为仓库根目录下的绝对路径）
+git_root=$(git rev-parse --show-toplevel 2>/dev/null)
 staged_files=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
 
 if [ -z "$staged_files" ]; then
@@ -106,15 +107,21 @@ if [ -z "$staged_files" ]; then
     exit 0
 fi
 
+# 将相对路径转为绝对路径，确保扫描路径正确
+abs_files=""
+for f in $staged_files; do
+    abs_files="$abs_files \\"$git_root/$f\\""
+done
+
 # 扫描暂存的文件
 if command -v compliance-scan >/dev/null 2>&1; then
-    compliance-scan $staged_files
+    compliance-scan $abs_files
     scan_exit=$?
 elif command -v python >/dev/null 2>&1; then
-    python -m compliance_scan $staged_files
+    python -m compliance_scan $abs_files
     scan_exit=$?
 elif command -v python3 >/dev/null 2>&1; then
-    python3 -m compliance_scan $staged_files
+    python3 -m compliance_scan $abs_files
     scan_exit=$?
 else
     echo "警告: 未找到 compliance-scan，请先安装"
@@ -183,13 +190,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         return uninstall_hook()
 
     try:
-        config = load_config(args.config)
+        config = load_config(args.config, scan_path=args.path)
     except Exception as e:
         print(f"错误: 加载配置失败: {e}", file=sys.stderr)
         return 2
 
     if args.config:
-        print(f"使用配置文件: {config.config_path}")
+        print(f"配置文件: {config.config_path}")
+    elif config.project_config_path:
+        print(f"内置规则: {config.config_path}")
+        print(f"项目规则: {config.project_config_path} (已合并)")
+    else:
+        print(f"配置文件: {config.config_path} (仅内置规则，未找到项目级配置)")
 
     target_path = args.path
     if not os.path.exists(target_path):
