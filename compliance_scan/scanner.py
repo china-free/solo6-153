@@ -1,13 +1,16 @@
-"""并发扫描模块"""
+"""并发扫描模块
+
+扫描器通过 RuleManager 获取规则，不直接依赖配置格式。
+规则级别的过滤（includes/excludes）由 RuleManager 负责。
+"""
 
 import os
-import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import List, Iterator, Optional, Tuple
+from typing import List, Iterator, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .config import Config, Pattern
+from .rules import Pattern
+from .config import Config
 
 
 @dataclass
@@ -50,23 +53,42 @@ def is_text_file(file_path: str, chunk_size: int = 8192) -> bool:
 
 
 def get_target_files(path: str, config: Config) -> Iterator[str]:
-    """获取所有需要扫描的文件"""
+    """获取所有需要扫描的文件
+
+    使用 RuleManager 的全局排除来过滤文件。
+    单文件直接判断是否被排除；目录则在遍历时过滤。
+    """
+    rule_mgr = config.rule_manager
+
     if os.path.isfile(path):
-        if not config.should_exclude(path) and is_text_file(path):
+        if not rule_mgr.should_exclude(path) and is_text_file(path):
             yield path
         return
 
     for root, dirs, files in os.walk(path):
-        dirs[:] = [d for d in dirs if not config.should_exclude(os.path.join(root, d) + '/')]
+        dirs[:] = [
+            d for d in dirs
+            if not rule_mgr.should_exclude(os.path.join(root, d) + '/')
+        ]
 
         for file in files:
             file_path = os.path.join(root, file)
-            if not config.should_exclude(file_path) and is_text_file(file_path):
+            if not rule_mgr.should_exclude(file_path) and is_text_file(file_path):
                 yield file_path
 
 
 def scan_file(file_path: str, config: Config) -> ScanResult:
-    """扫描单个文件"""
+    """扫描单个文件
+
+    通过 RuleManager.get_rules_for_file() 获取该文件适用的规则，
+    而不是对所有文件都应用全部规则。
+    """
+    rule_mgr = config.rule_manager
+    applicable_rules = rule_mgr.get_rules_for_file(file_path)
+
+    if not applicable_rules:
+        return ScanResult(file_path=file_path, matches=[])
+
     matches = []
     try:
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -75,22 +97,26 @@ def scan_file(file_path: str, config: Config) -> ScanResult:
         return ScanResult(file_path=file_path, matches=[])
 
     for line_num, line in enumerate(lines, 1):
-        for pattern in config.patterns:
-            for match in pattern.regex.finditer(line):
+        for rule in applicable_rules:
+            for m in rule.regex.finditer(line):
                 matches.append(Match(
                     file_path=file_path,
                     line_number=line_num,
                     line_content=line.rstrip('\n'),
-                    pattern=pattern,
-                    match_text=match.group(),
-                    start=match.start(),
-                    end=match.end()
+                    pattern=rule,
+                    match_text=m.group(),
+                    start=m.start(),
+                    end=m.end(),
                 ))
 
     return ScanResult(file_path=file_path, matches=matches)
 
 
-def scan_path(path: str, config: Config, max_workers: Optional[int] = None) -> List[ScanResult]:
+def scan_path(
+    path: str,
+    config: Config,
+    max_workers: Optional[int] = None,
+) -> List[ScanResult]:
     """并发扫描路径下的所有文件"""
     if max_workers is None:
         max_workers = min(os.cpu_count() or 4, 16)

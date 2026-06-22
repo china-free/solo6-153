@@ -1,16 +1,20 @@
-"""配置加载模块"""
+"""配置加载模块
+
+负责从 YAML 文件加载规则配置，并构建 RuleManager 实例。
+规则本身的逻辑由 rules.RuleManager 管理，本模块只做配置解析和组装。
+"""
 
 import os
-import re
-import fnmatch
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Dict, Tuple
+from typing import Optional
 
 try:
     import yaml
 except ImportError:
     yaml = None
+
+from .rules import RuleManager, Pattern
 
 PROJECT_CONFIG_NAMES = [
     '.compliance-scan.yaml',
@@ -20,38 +24,38 @@ PROJECT_CONFIG_NAMES = [
 
 
 @dataclass
-class Pattern:
-    """匹配规则"""
-    name: str
-    pattern: str
-    severity: str = "medium"
-    description: str = ""
-    regex: re.Pattern = field(init=False)
-
-    def __post_init__(self):
-        self.regex = re.compile(self.pattern, re.MULTILINE)
-
-
-@dataclass
 class Config:
-    """扫描配置"""
-    patterns: List[Pattern]
-    excludes: List[str]
+    """配置加载结果
+
+    包装 RuleManager 和配置元信息，供 CLI 和下游模块使用。
+    规则相关的逻辑（过滤、匹配）请通过 rule_manager 访问。
+    """
+    rule_manager: RuleManager
     config_path: Optional[Path] = None
     project_config_path: Optional[Path] = None
 
+    @property
+    def patterns(self) -> list:
+        """向后兼容：返回所有规则列表
+
+        新代码请使用 rule_manager.get_all_rules() 或 get_rules_for_file()。
+        """
+        return self.rule_manager.get_all_rules()
+
+    @property
+    def excludes(self) -> list:
+        """向后兼容：返回全局排除列表
+
+        新代码请使用 rule_manager.should_exclude()。
+        """
+        return self.rule_manager.get_global_excludes()
+
     def should_exclude(self, path: str) -> bool:
-        """检查路径是否应该被排除"""
-        path = path.replace('\\', '/')
-        for pattern in self.excludes:
-            if pattern.endswith('/'):
-                if pattern in path:
-                    return True
-            elif fnmatch.fnmatch(path, pattern):
-                return True
-            elif fnmatch.fnmatch(os.path.basename(path), pattern):
-                return True
-        return False
+        """向后兼容：判断文件是否被排除
+
+        新代码请使用 rule_manager.should_exclude()。
+        """
+        return self.rule_manager.should_exclude(path)
 
 
 def find_git_root(start_path: str) -> Optional[str]:
@@ -101,67 +105,43 @@ def find_project_config(scan_path: str) -> Optional[Path]:
     return None
 
 
-def _load_yaml_config(config_file: Path) -> Tuple[List[Pattern], List[str]]:
-    """从 YAML 文件加载规则和排除项"""
+def _build_rule_manager_from_yaml(config_file: Path) -> RuleManager:
+    """从 YAML 配置文件构建 RuleManager"""
+    if yaml is None:
+        raise ImportError("PyYAML 未安装，请运行: pip install PyYAML")
+
     with open(config_file, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f) or {}
 
-    patterns = []
+    manager = RuleManager()
+
     for p in data.get('patterns', []):
-        patterns.append(Pattern(
+        rule = Pattern(
             name=p['name'],
             pattern=p['pattern'],
             severity=p.get('severity', 'medium'),
-            description=p.get('description', '')
-        ))
+            description=p.get('description', ''),
+            includes=p.get('includes', []),
+            excludes=p.get('excludes', []),
+        )
+        manager.add_rule(rule)
 
     excludes = data.get('excludes', [])
+    manager.set_global_excludes(excludes)
 
-    return patterns, excludes
-
-
-def _merge_configs(
-    base_patterns: List[Pattern],
-    base_excludes: List[str],
-    override_patterns: List[Pattern],
-    override_excludes: List[str],
-) -> Tuple[List[Pattern], List[str]]:
-    """合并内置配置和项目级配置
-
-    合并策略:
-    - 规则: 项目级按 name 覆盖内置同名规则，新增规则追加到末尾
-    - 排除项: 合并去重
-    """
-    merged_patterns = list(base_patterns)
-    base_names = {p.name for p in base_patterns}
-
-    for op in override_patterns:
-        if op.name in base_names:
-            merged_patterns = [p if p.name != op.name else op for p in merged_patterns]
-        else:
-            merged_patterns.append(op)
-
-    merged_excludes = list(base_excludes)
-    seen = set(base_excludes)
-    for ex in override_excludes:
-        if ex not in seen:
-            merged_excludes.append(ex)
-            seen.add(ex)
-
-    return merged_patterns, merged_excludes
+    return manager
 
 
 def load_config(
     config_path: Optional[str] = None,
     scan_path: Optional[str] = None,
 ) -> Config:
-    """加载配置文件
+    """加载配置文件，返回包含 RuleManager 的 Config 对象
 
     加载策略 (当 config_path 未显式指定时):
     1. 加载内置 default-patterns.yaml 作为基础
     2. 从 scan_path 向上搜索项目级配置文件
-    3. 如果找到项目级配置，与内置规则合并 (项目级同名规则覆盖内置，新增规则追加)
-    4. 如果找不到任何配置文件则报错
+    3. 如果找到项目级配置，与内置规则合并 (项目级同名规则覆盖，新增规则追加)
 
     当 config_path 显式指定时:
     - 仅加载指定文件，不与内置规则合并 (用户全权控制)
@@ -173,10 +153,9 @@ def load_config(
         config_file = Path(config_path)
         if not config_file.exists():
             raise FileNotFoundError(f"配置文件不存在: {config_path}")
-        patterns, excludes = _load_yaml_config(config_file)
+        manager = _build_rule_manager_from_yaml(config_file)
         return Config(
-            patterns=patterns,
-            excludes=excludes,
+            rule_manager=manager,
             config_path=config_file,
         )
 
@@ -184,27 +163,22 @@ def load_config(
     if not default_path.exists():
         raise FileNotFoundError("未找到内置配置文件 default-patterns.yaml")
 
-    base_patterns, base_excludes = _load_yaml_config(default_path)
+    base_manager = _build_rule_manager_from_yaml(default_path)
 
     project_config_path = None
     if scan_path:
         project_config_path = find_project_config(scan_path)
 
     if project_config_path:
-        project_patterns, project_excludes = _load_yaml_config(project_config_path)
-        merged_patterns, merged_excludes = _merge_configs(
-            base_patterns, base_excludes,
-            project_patterns, project_excludes,
-        )
+        project_manager = _build_rule_manager_from_yaml(project_config_path)
+        base_manager.merge(project_manager)
         return Config(
-            patterns=merged_patterns,
-            excludes=merged_excludes,
+            rule_manager=base_manager,
             config_path=default_path,
             project_config_path=project_config_path,
         )
 
     return Config(
-        patterns=base_patterns,
-        excludes=base_excludes,
+        rule_manager=base_manager,
         config_path=default_path,
     )
